@@ -55,6 +55,8 @@ export const COPY = {
     inspector: "Inspector",
     timelineLabel: "Timeline editor",
     previewLabel: "Program monitor",
+    fullscreen: "Fullscreen preview",
+    exitFullscreen: "Exit fullscreen",
     addTrack: "Add track",
     emptyTimelineTitle: "Your timeline is empty",
     emptyTimelineBody: "Import media on the left, then drag clips here — or press the button below.",

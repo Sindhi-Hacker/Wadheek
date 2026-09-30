@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Download, Loader2, X } from "lucide-react";
-import { toast } from "sonner";
+import { showAlert } from "@/components/common/dialog-service";
 import {
   Dialog,
   DialogContent,
@@ -77,11 +77,16 @@ export function ExportDialog({ open, onOpenChange }: ExportDialogProps) {
     }
     const state = useEditorStore.getState();
     if (timelineDuration(state.tracks) <= 0) {
-      toast.error(COPY.export.emptyTimeline);
+      void showAlert({
+        variant: "error",
+        title: COPY.dialogs.exportEmptyTitle,
+        description: COPY.export.emptyTimeline,
+      });
       return;
     }
     setError(null);
-    await start(parsed.data);
+    const result = await start(parsed.data);
+    if (result) onOpenChange(false);
   };
 
   const mp4Hint = form.formatId === "mp4" && !mp4Native && !ffmpegReady;

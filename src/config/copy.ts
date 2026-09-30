@@ -223,6 +223,34 @@ export const COPY = {
     confirm: "Confirm",
     delete: "Delete",
   },
+  dialogs: {
+    ok: "OK",
+    importIssuesTitle: "Some files could not be imported",
+    importIssuesIntro: "The following files were skipped:",
+    importUnsupported: (name: string) => `${name} — unsupported format`,
+    importTooLarge: (name: string) => `${name} — exceeds the size limit`,
+    importReadError: (name: string) => `${name} — could not be read`,
+    exportCompleteTitle: "Export complete",
+    exportCompleteBody: (file: string) =>
+      `${file} was rendered locally and downloaded to your device.`,
+    exportFailedTitle: "Export failed",
+    exportFailedBody: "The render could not be completed. Try a lower resolution or a different format.",
+    exportCanceledTitle: "Export canceled",
+    exportCanceledBody: "The render was stopped. No file was saved.",
+    exportEmptyTitle: "Nothing to export",
+    mp4FallbackTitle: "MP4 encoder not available",
+    addToTimelineFailedTitle: "Couldn't add to timeline",
+    addToTimelineFailedBody:
+      "No compatible unlocked track was found for this media. Unlock a track or add a new one, then try again.",
+    deleteTrackTitle: "Delete this track?",
+    deleteTrackBody: (name: string, clips: number) =>
+      clips > 0
+        ? `"${name}" contains ${clips} clip${clips === 1 ? "" : "s"}. Deleting the track removes them from the timeline. You can undo this.`
+        : `"${name}" will be removed from the timeline. You can undo this.`,
+    projectImportFailedTitle: "Project import failed",
+    projectExportFailedTitle: "Project export failed",
+    genericErrorBody: "Something went wrong. Please try again.",
+  },
   a11y: {
     timeline: "Timeline. Use arrow keys to move the playhead, space to play or pause.",
     playhead: "Playhead",

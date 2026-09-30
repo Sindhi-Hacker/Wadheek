@@ -1,6 +1,6 @@
 import * as React from "react";
-import { toast } from "sonner";
 import { COPY } from "@/config/copy";
+import { showAlert } from "@/components/common/dialog-service";
 import { download } from "@/lib/utils";
 import { useMediaStore } from "@/features/media/media-store";
 import type { ExportProgress, ExportSettings } from "../types/export";
@@ -49,7 +49,11 @@ export function useExport() {
             effectiveFormat = "webm";
             viaFfmpeg = true;
           } else {
-            toast.info(COPY.export.ffmpegUnavailable);
+            await showAlert({
+              variant: "warning",
+              title: COPY.dialogs.mp4FallbackTitle,
+              description: COPY.export.ffmpegUnavailable,
+            });
             effectiveFormat = "webm";
           }
         }
@@ -74,20 +78,31 @@ export function useExport() {
 
         download(final.blob, final.fileName);
         setProgress((p) => ({ ...p, phase: "done", progress: 1 }));
-        toast.success(COPY.export.done, { description: COPY.export.doneBody });
+        void showAlert({
+          variant: "success",
+          title: COPY.dialogs.exportCompleteTitle,
+          description: COPY.dialogs.exportCompleteBody(final.fileName),
+        });
         return final;
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           setProgress({ ...IDLE, phase: "canceled" });
-          toast(COPY.export.canceled);
+          void showAlert({
+            variant: "info",
+            title: COPY.dialogs.exportCanceledTitle,
+            description: COPY.dialogs.exportCanceledBody,
+          });
         } else {
           setProgress({
             ...IDLE,
             phase: "error",
             message: err instanceof Error ? err.message : String(err),
           });
-          toast.error(COPY.export.failed, {
-            description: err instanceof Error ? err.message : undefined,
+          void showAlert({
+            variant: "error",
+            title: COPY.dialogs.exportFailedTitle,
+            description:
+              err instanceof Error && err.message ? err.message : COPY.dialogs.exportFailedBody,
           });
         }
         return null;

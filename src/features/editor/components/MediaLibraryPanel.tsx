@@ -1,6 +1,7 @@
 import * as React from "react";
 import { AudioLines, FileVideo, Image as ImageIcon, Import, Plus, Trash2, Type } from "lucide-react";
 import { toast } from "sonner";
+import { showAlert } from "@/components/common/dialog-service";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -36,7 +37,13 @@ function MediaItem({ asset }: { asset: MediaAsset }) {
   const addToTimeline = () => {
     const store = useEditorStore.getState();
     const id = store.addClipFromMedia(asset, { time: store.currentTime });
-    if (!id) toast.error(COPY.toasts.unsupportedFile(asset.name));
+    if (!id) {
+      void showAlert({
+        variant: "error",
+        title: COPY.dialogs.addToTimelineFailedTitle,
+        description: COPY.dialogs.addToTimelineFailedBody,
+      });
+    }
   };
 
   const remove = async () => {

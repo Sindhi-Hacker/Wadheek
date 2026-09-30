@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { showAlert } from "@/components/common/dialog-service";
 import { FolderInput, Plus, SearchX, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,7 +77,12 @@ function DashboardPage() {
       download(blob, projectFileName(project));
     },
     onSuccess: () => toast.success(COPY.toasts.projectExported),
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Export failed"),
+    onError: (err) =>
+      void showAlert({
+        variant: "error",
+        title: COPY.dialogs.projectExportFailedTitle,
+        description: err instanceof Error ? err.message : COPY.dialogs.genericErrorBody,
+      }),
   });
 
   const importMutation = useMutation({
@@ -95,7 +101,12 @@ function DashboardPage() {
       void invalidate();
       toast.success(COPY.toasts.projectImported);
     },
-    onError: (err) => toast.error(err instanceof Error ? err.message : "Import failed"),
+    onError: (err) =>
+      void showAlert({
+        variant: "error",
+        title: COPY.dialogs.projectImportFailedTitle,
+        description: err instanceof Error ? err.message : COPY.dialogs.genericErrorBody,
+      }),
   });
 
   const projects = projectsQuery.data ?? [];

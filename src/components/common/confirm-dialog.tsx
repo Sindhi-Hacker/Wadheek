@@ -1,12 +1,15 @@
+import { CircleAlert, TriangleAlert } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
 import { COPY } from "@/config/copy";
 
 interface ConfirmDialogProps {
@@ -19,6 +22,10 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
 }
 
+/**
+ * Professional confirmation modal built on Radix AlertDialog: focus-trapped,
+ * ESC/overlay-dismissable as "cancel", destructive styling with icon.
+ */
 export function ConfirmDialog({
   open,
   onOpenChange,
@@ -28,18 +35,35 @@ export function ConfirmDialog({
   destructive = false,
   onConfirm,
 }: ConfirmDialogProps) {
+  const Icon = destructive ? CircleAlert : TriangleAlert;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description && <DialogDescription>{description}</DialogDescription>}
-        </DialogHeader>
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
+      <AlertDialogContent className="max-w-md">
+        <div className="flex flex-col gap-4 sm:flex-row">
+          <span
+            className={cn(
+              "mx-auto flex h-11 w-11 shrink-0 items-center justify-center rounded-xl sm:mx-0",
+              destructive ? "bg-destructive/10" : "bg-warning/10"
+            )}
+            aria-hidden
+          >
+            <Icon className={cn("h-5 w-5", destructive ? "text-destructive" : "text-warning")} />
+          </span>
+          <AlertDialogHeader className="min-w-0">
+            <AlertDialogTitle>{title}</AlertDialogTitle>
+            {description && (
+              <AlertDialogDescription className="break-words">
+                {description}
+              </AlertDialogDescription>
+            )}
+          </AlertDialogHeader>
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => onOpenChange(false)}>
             {COPY.confirm.cancel}
-          </Button>
-          <Button
+          </AlertDialogCancel>
+          <AlertDialogAction
             variant={destructive ? "destructive" : "default"}
             onClick={() => {
               onConfirm();
@@ -47,9 +71,9 @@ export function ConfirmDialog({
             }}
           >
             {confirmLabel ?? (destructive ? COPY.confirm.delete : COPY.confirm.confirm)}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

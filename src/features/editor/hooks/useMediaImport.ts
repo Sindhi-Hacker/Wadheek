@@ -1,9 +1,20 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { COPY } from "@/config/copy";
-import { useMediaStore } from "@/features/media/media-store";
+import { showAlert } from "@/components/common/dialog-service";
+import { useMediaStore, type ImportFailure } from "@/features/media/media-store";
 
-/** File-picker + drag-and-drop media importing with toast feedback. */
+function describeFailure(f: ImportFailure): string {
+  if (f.reason === "too-large") return COPY.dialogs.importTooLarge(f.name);
+  if (f.reason === "unsupported") return COPY.dialogs.importUnsupported(f.name);
+  return COPY.dialogs.importReadError(f.name);
+}
+
+/**
+ * File-picker + drag-and-drop media importing.
+ * Successes get lightweight toast feedback; failures are consolidated into a
+ * single professional alert dialog listing every skipped file.
+ */
 export function useMediaImport() {
   const importFiles = useMediaStore((s) => s.importFiles);
   const importing = useMediaStore((s) => s.importing);
@@ -14,12 +25,12 @@ export function useMediaImport() {
       if (files.length === 0) return;
       const { imported, failed } = await importFiles(files);
       if (imported.length > 0) toast.success(COPY.toasts.mediaImported(imported.length));
-      for (const f of failed) {
-        toast.error(
-          f.reason === "too-large"
-            ? COPY.toasts.fileTooLarge(f.name)
-            : COPY.toasts.unsupportedFile(f.name)
-        );
+      if (failed.length > 0) {
+        void showAlert({
+          variant: "error",
+          title: COPY.dialogs.importIssuesTitle,
+          description: [COPY.dialogs.importIssuesIntro, ...failed.map(describeFailure)].join("\n"),
+        });
       }
     },
     [importFiles]

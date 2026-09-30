@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AppHeader } from "@/components/layout/app-header";
 import { MobileNav } from "@/components/layout/mobile-nav";
 import { ErrorBoundary } from "@/components/common/error-boundary";
+import { DialogServiceHost } from "@/components/common/dialog-service";
 import { GlobalCommandPalette } from "@/features/editor/components/CommandPalette";
 import { useMediaStore } from "@/features/media/media-store";
 
@@ -52,6 +53,7 @@ function RootLayout() {
         {!isEditor && <MobileNav />}
       </div>
       <GlobalCommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <DialogServiceHost />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   );

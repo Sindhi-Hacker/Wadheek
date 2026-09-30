@@ -14,6 +14,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { toast } from "sonner";
+import { showConfirm } from "@/components/common/dialog-service";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -161,7 +162,16 @@ export function TrackHeader({ track, compact }: TrackHeaderProps) {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
-            onClick={() => {
+            onClick={async () => {
+              if (track.clips.length > 0) {
+                const confirmed = await showConfirm({
+                  title: COPY.dialogs.deleteTrackTitle,
+                  description: COPY.dialogs.deleteTrackBody(track.name, track.clips.length),
+                  confirmLabel: COPY.confirm.delete,
+                  destructive: true,
+                });
+                if (!confirmed) return;
+              }
               store().deleteTrack(track.id);
               toast(COPY.toasts.trackDeleted);
             }}

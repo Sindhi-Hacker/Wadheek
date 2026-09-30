@@ -45,7 +45,7 @@ function RootLayout() {
     <TooltipProvider delayDuration={300}>
       <div className="flex min-h-full flex-col bg-background text-foreground">
         {!isEditor && <AppHeader onOpenCommandPalette={() => setPaletteOpen(true)} />}
-        <main className={isEditor ? "flex-1" : "flex-1 pb-20 md:pb-0"}>
+        <main className={isEditor ? "flex-1" : "flex-1 pb-24 md:pb-0"}>
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

@@ -172,5 +172,7 @@ export const TRACK_KIND_META = {
 } as const;
 
 export const PROJECT_FILE_EXTENSION = ".wadheek";
+
+export const APP_VERSION = "1.0.0";
 export const APP_NAME = "Wadheek";
 export const APP_TAGLINE = "Edit video entirely in your browser. Nothing ever leaves your device.";

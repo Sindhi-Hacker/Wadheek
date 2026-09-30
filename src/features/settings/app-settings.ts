@@ -20,3 +20,13 @@ export function readAppSettings(): AppSettings {
   }
   return DEFAULT_APP_SETTINGS;
 }
+
+export function writeAppSettings(patch: Partial<AppSettings>): AppSettings {
+  const next = { ...readAppSettings(), ...patch };
+  try {
+    localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(next));
+  } catch {
+    /* storage may be unavailable (private mode); settings stay in-memory */
+  }
+  return next;
+}

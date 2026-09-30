@@ -1,10 +1,10 @@
 import * as React from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { toast } from "sonner";
 import { showAlert } from "@/components/common/dialog-service";
-import { FolderInput, Plus, SearchX, Video } from "lucide-react";
+import { FolderInput, Plus, Search as SearchIcon, SearchX, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -115,7 +115,7 @@ function DashboardPage() {
     : projects;
 
   return (
-    <div className="container py-8 md:py-12">
+    <div className="container py-6 md:py-12">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
@@ -124,10 +124,14 @@ function DashboardPage() {
           <p className="mt-1 text-sm text-muted-foreground">{COPY.dashboard.subtitle}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => importInputRef.current?.click()}>
+          <Button
+            variant="outline"
+            className="flex-1 sm:flex-none"
+            onClick={() => importInputRef.current?.click()}
+          >
             <FolderInput /> {COPY.dashboard.importProject}
           </Button>
-          <Button onClick={() => setNewOpen(true)}>
+          <Button className="hidden sm:inline-flex" onClick={() => setNewOpen(true)}>
             <Plus /> {COPY.dashboard.newProject}
           </Button>
           <input
@@ -145,19 +149,24 @@ function DashboardPage() {
       </div>
 
       {projects.length > 0 && (
-        <div className="mt-6 max-w-sm">
+        <div className="relative mt-5 sm:max-w-sm md:mt-6">
+          <SearchIcon
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={COPY.dashboard.searchPlaceholder}
             aria-label={COPY.dashboard.searchPlaceholder}
+            className="h-10 pl-9"
           />
         </div>
       )}
 
       <div className="mt-6">
         {projectsQuery.isLoading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="overflow-hidden rounded-xl border">
                 <Skeleton className="aspect-video rounded-none" />
@@ -187,7 +196,7 @@ function DashboardPage() {
             className="mt-4"
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <AnimatePresence>
               {filtered.map((project) => (
                 <ProjectCard
@@ -203,6 +212,24 @@ function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* Floating action button on phones, above the bottom tab bar. */}
+      <motion.div
+        className="fixed right-4 z-40 sm:hidden"
+        style={{ bottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: "spring", stiffness: 400, damping: 28 }}
+      >
+        <Button
+          size="icon"
+          className="h-14 w-14 rounded-full shadow-elevation-3 active:scale-95"
+          aria-label={COPY.dashboard.newProject}
+          onClick={() => setNewOpen(true)}
+        >
+          <Plus className="!h-6 !w-6" />
+        </Button>
+      </motion.div>
 
       <NewProjectDialog open={newOpen} onOpenChange={setNewOpen} />
     </div>

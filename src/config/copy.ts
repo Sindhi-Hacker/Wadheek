@@ -188,8 +188,13 @@ export const COPY = {
     cleared: "All local data cleared",
     about: "About",
     snapDefault: "Enable snapping by default",
+    snapDefaultBody: "New editing sessions start with magnetic snapping turned on.",
     autosave: "Autosave",
     autosaveBody: "Projects save automatically a moment after every change.",
+    alwaysOn: "Always on",
+    usageOf: (used: string, total: string) => `${used} used of ${total} available`,
+    usageUnknown: "Storage usage is not available in this browser.",
+    version: "Version",
   },
   toasts: {
     projectCreated: "Project created",

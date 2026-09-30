@@ -14,6 +14,29 @@ exports never leave your device.
 - **Real editing, not a mockup** — multi-track timeline (video / overlay / text / audio),
   drag, trim, split, slice, duplicate, copy-paste, ripple delete, magnetic snapping with
   Alt-override, markers, in/out range, loop playback, J/K/L shuttle, frame stepping.
+- **Full keyframe system** — animate *any* property (position, scale, rotation, opacity,
+  volume, font size, and every color filter) with ◇ diamonds beside each control, an
+  auto-key mode, 9 easing curves (incl. bounce, elastic, spring and hold), a draggable
+  **curve editor** in the timeline, and 18 one-click motion presets (Ken Burns, fly-in,
+  pop, spin, shake, heartbeat, float, …). Keyframes survive splits and are exported with
+  the project.
+- **Interactive canvas** — select, move, scale and rotate clips directly in the preview
+  with magnetic center guides, double-click text to edit it *on the canvas*, composition
+  guides (thirds + title-safe), and frame-accurate drag of keyframes in the curve editor.
+- **Unique: motion recorder** — arm it, drag a clip around the preview, and the gesture is
+  converted into cleaned-up keyframe tracks (smart curve thinning collapses straight moves
+  to two keyframes while keeping curved paths within tolerance).
+- **Unique: animated draw-on ink** — freehand pen/marker tool that inks on the video with
+  the playhead following the pen, then replays as an animated stroke during playback and
+  export. Undo per stroke.
+- **Unique: local audio intelligence** — beat detection turns a music clip's waveform into
+  timeline markers (snap cuts to beats), and auto-ducking writes volume keyframes that dip
+  music under speech — both run entirely in the browser.
+- **More pro tools** — green-screen chroma key (similarity/smoothness/spill, YCbCr keying),
+  freeze frame at playhead (spliced between clip halves), detach audio to its own track,
+  sticker layers (emoji + vector shapes), text presets (neon, meme, news bar, karaoke…),
+  letter/line spacing, flip H/V, fit/fill with blurred background, solid-color clips,
+  per-frame PNG export, and a built-in stock library of free sample footage.
 - **Media library** — drag-and-drop or file-picker import of video, audio and images with
   automatic metadata probing (duration, resolution), filmstrip thumbnails and audio waveforms.
 - **Compositor preview** — canvas compositing with transforms (position, scale, rotation,

@@ -66,6 +66,8 @@ export function FilterPanel({ clip }: { clip: Clip }) {
           step={def.step}
           defaultValue={def.def}
           onChange={(v) => update({ [def.id]: v } as Partial<ClipFilters>)}
+          clip={clip}
+          keyframeProp={def.id}
         />
       ))}
     </Section>

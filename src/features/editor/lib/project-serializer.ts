@@ -4,6 +4,7 @@ import { PROJECT_FILE_EXTENSION } from "@/config/defaults";
 import type { Project } from "../types/project";
 import type { MediaAsset } from "../types/media";
 import { projectSchema } from "./project-schema";
+import { migrateTracks } from "./clip-operations";
 import { loadBlob, saveBlob } from "./opfs-storage";
 
 const MANIFEST_NAME = "project.json";
@@ -73,6 +74,10 @@ export async function importProjectFile(
     id: createId("proj"),
     createdAt: Date.now(),
     updatedAt: Date.now(),
+    timeline: {
+      ...parsed.data.timeline,
+      tracks: migrateTracks(parsed.data.timeline.tracks as Project["timeline"]["tracks"]),
+    },
   };
 
   const media: MediaAsset[] = [];

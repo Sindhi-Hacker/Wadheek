@@ -7,14 +7,41 @@ import { LIMITS } from "@/config/limits";
 import { TIMELINE_DEFAULTS, TRACK_KIND_META, DEFAULT_PROJECT_SETTINGS } from "@/config/defaults";
 import type { Project, ProjectSettings } from "../types/project";
 import type { Track, TrackKind } from "../types/track";
-import type { Clip } from "../types/clip";
+import type {
+  Clip,
+  KeyframeProperty,
+  KeyframeTracks,
+  EasingId,
+  DrawStroke,
+} from "../types/clip";
 import type { Marker } from "../types/timeline";
 import type { MediaAsset } from "../types/media";
 import { readAppSettings } from "@/features/settings/app-settings";
-import { createClipFromMedia, createTextClip, cloneClip } from "../lib/clip-operations";
+import {
+  createClipFromMedia,
+  createTextClip,
+  createStickerClip,
+  createDrawingClip,
+  cloneClip,
+  migrateTracks,
+  findPlacement,
+  compatibleTrackKinds,
+} from "../lib/clip-operations";
+import {
+  KEYFRAME_PROPERTIES,
+  upsertKeyframe,
+  removeKeyframe,
+  moveKeyframe,
+  setKeyframeEasing,
+  setKeyframeValue,
+  applyMotionPreset,
+} from "../lib/keyframes";
+import type { MotionSample } from "../lib/keyframes";
+import { samplesToKeyframes } from "../lib/keyframes";
 import { splitClip } from "../lib/split-clip";
 import { rippleDelete } from "../lib/ripple-delete";
 import { timelineDuration, resolveOverlap, snapToFrame } from "../lib/timeline-math";
+import type { DrawingToolState } from "../lib/drawing";
 
 export type SaveState = "saved" | "saving" | "dirty";
 
@@ -45,6 +72,16 @@ export interface EditorState extends HistorySlice {
   clipboard: Clip[];
   saveState: SaveState;
   snapGuideTime: number | null;
+  /** Freehand drawing tool state; null = off. */
+  drawMode: DrawingToolState | null;
+  /** Live motion recorder armed. */
+  motionRecording: boolean;
+  /** Bumped to ask the inspector to focus the text editor for the selection. */
+  textEditRequest: number;
+  /** Easing used for keyframes created from now on. */
+  defaultKeyframeEasing: EasingId;
+  /** Auto-keyframe: property edits also write a keyframe at the playhead. */
+  autoKeyframes: boolean;
 
   /* actions */
   loadProject: (project: Project) => void;
@@ -62,6 +99,12 @@ export interface EditorState extends HistorySlice {
   setPps: (pps: number) => void;
   toggleSnapping: () => void;
   setSnapGuide: (t: number | null) => void;
+  setDrawMode: (mode: DrawingToolState | null) => void;
+  setMotionRecording: (on: boolean) => void;
+  requestTextEdit: () => void;
+  setDefaultKeyframeEasing: (easing: EasingId) => void;
+  toggleAutoKeyframes: () => void;
+  setKeyframedValue: (clipId: string, prop: KeyframeProperty, value: number) => void;
 
   select: (ids: string[], additive?: boolean) => void;
   clearSelection: () => void;
@@ -74,7 +117,11 @@ export interface EditorState extends HistorySlice {
   moveTrack: (id: string, direction: -1 | 1) => void;
 
   addClipFromMedia: (asset: MediaAsset, opts?: { trackId?: string; time?: number }) => string | null;
-  addTextClip: (time?: number) => string;
+  addTextClip: (time?: number) => string | null;
+  addStickerClip: (sticker: { type: "emoji" | "shape"; content: string }, time?: number) => string | null;
+  appendDrawingStroke: (stroke: DrawStroke) => string | null;
+  undoLastStroke: (clipId: string) => void;
+  detachAudio: (clipId: string) => boolean;
   updateClip: (id: string, updater: (clip: Clip) => Clip) => void;
   updateSelectedClips: (updater: (clip: Clip) => Clip) => void;
   moveClips: (moves: { clipId: string; trackId: string; start: number }[]) => void;
@@ -86,7 +133,19 @@ export interface EditorState extends HistorySlice {
   copySelection: () => number;
   pasteAtTime: (time: number) => number;
 
+  /* keyframes */
+  setClipKeyframes: (clipId: string, tracks: KeyframeTracks) => void;
+  toggleClipKeyframe: (clipId: string, prop: KeyframeProperty, time?: number) => void;
+  removeClipKeyframe: (clipId: string, prop: KeyframeProperty, kfId: string) => void;
+  moveClipKeyframe: (clipId: string, prop: KeyframeProperty, kfId: string, time: number) => void;
+  setClipKeyframeEasing: (clipId: string, prop: KeyframeProperty, kfId: string, easing: EasingId) => void;
+  setClipKeyframeValue: (clipId: string, prop: KeyframeProperty, kfId: string, value: number) => void;
+  clearClipKeyframes: (clipId: string, prop?: KeyframeProperty) => void;
+  applyClipMotionPreset: (clipId: string, presetId: string) => void;
+  recordMotionSamples: (clipId: string, samples: MotionSample[], props: KeyframeProperty[]) => void;
+
   addMarker: (time: number, name?: string) => void;
+  addMarkers: (markers: { time: number; name: string }[]) => number;
   renameMarker: (id: string, name: string) => void;
   removeMarker: (id: string) => void;
   setInPoint: (t: number | null) => void;
@@ -107,17 +166,29 @@ function makeTrack(kind: TrackKind, index: number): Track {
   };
 }
 
-function preferredTrackKind(clipKind: Clip["kind"]): TrackKind[] {
-  switch (clipKind) {
+function preferredTrackKindOf(kind: Clip["kind"]): TrackKind[] {
+  switch (kind) {
     case "audio":
       return ["audio"];
     case "text":
+    case "sticker":
       return ["text", "overlay"];
+    case "drawing":
+      return ["overlay", "text"];
     case "image":
       return ["overlay", "video"];
     default:
       return ["video", "overlay"];
   }
+}
+
+function findClip(tracks: Track[], clipId: string): Clip | undefined {
+  for (const track of tracks) {
+    for (const clip of track.clips) {
+      if (clip.id === clipId) return clip;
+    }
+  }
+  return undefined;
 }
 
 const initialDoc = {
@@ -143,6 +214,11 @@ const initialTransient = {
   clipboard: [] as Clip[],
   saveState: "saved" as SaveState,
   snapGuideTime: null as number | null,
+  drawMode: null as DrawingToolState | null,
+  motionRecording: false,
+  textEditRequest: 0,
+  defaultKeyframeEasing: "ease-in-out" as EasingId,
+  autoKeyframes: false,
 };
 
 export const useEditorStore = create<EditorState>()(
@@ -160,7 +236,7 @@ export const useEditorStore = create<EditorState>()(
           createdAt: project.createdAt,
           settings: project.settings,
           mediaIds: project.mediaIds,
-          tracks: project.timeline.tracks,
+          tracks: migrateTracks(project.timeline.tracks),
           markers: project.timeline.markers,
           inPoint: project.timeline.inPoint,
           outPoint: project.timeline.outPoint,
@@ -201,6 +277,11 @@ export const useEditorStore = create<EditorState>()(
         }),
       toggleSnapping: () => set((s) => ({ snapping: !s.snapping })),
       setSnapGuide: (snapGuideTime) => set({ snapGuideTime }),
+      setDrawMode: (drawMode) => set({ drawMode }),
+      setMotionRecording: (motionRecording) => set({ motionRecording }),
+      requestTextEdit: () => set((s) => ({ textEditRequest: s.textEditRequest + 1 })),
+      setDefaultKeyframeEasing: (defaultKeyframeEasing) => set({ defaultKeyframeEasing }),
+      toggleAutoKeyframes: () => set((s) => ({ autoKeyframes: !s.autoKeyframes })),
 
       select: (ids, additive = false) =>
         set((s) => ({
@@ -257,21 +338,25 @@ export const useEditorStore = create<EditorState>()(
         const time = snapToFrame(opts?.time ?? s.currentTime, s.settings.fps);
         const clip = createClipFromMedia(asset, time);
 
-        let track = opts?.trackId ? s.tracks.find((t) => t.id === opts.trackId) : undefined;
-        if (!track || track.locked) {
-          const kinds = preferredTrackKind(clip.kind);
-          for (const kind of kinds) {
-            track = s.tracks.find((t) => t.kind === kind && !t.locked);
-            if (track) break;
+        // Prefer the requested track if the slot is free.
+        let place: { trackId: string; start: number } | null = null;
+        if (opts?.trackId) {
+          const track = s.tracks.find((t) => t.id === opts.trackId);
+          if (track && !track.locked) {
+            const start = resolveOverlap(track.clips, new Set(), time, clip.duration);
+            place = { trackId: track.id, start };
           }
         }
-        if (!track) return null;
+        if (!place) place = findPlacement(s.tracks, clip, time);
+        if (!place) return null;
+        clip.start = snapToFrame(place.start, s.settings.fps);
 
-        clip.start = resolveOverlap(track.clips, new Set(), time, clip.duration);
-        const trackId = track.id;
+        const trackId = place.trackId;
         set((state) => ({
           tracks: state.tracks.map((t) =>
-            t.id === trackId ? { ...t, clips: [...t.clips, clip].sort((a, b) => a.start - b.start) } : t
+            t.id === trackId
+              ? { ...t, clips: [...t.clips, clip].sort((a, b) => a.start - b.start) }
+              : t
           ),
           mediaIds: state.mediaIds.includes(asset.id)
             ? state.mediaIds
@@ -279,6 +364,11 @@ export const useEditorStore = create<EditorState>()(
           selection: [clip.id],
           saveState: "dirty",
         }));
+        // Keep the playhead inside the new clip so it's immediately visible.
+        const st = get();
+        if (st.currentTime < clip.start || st.currentTime >= clip.start + clip.duration) {
+          st.setCurrentTime(clip.start + Math.min(0.15, clip.duration / 2));
+        }
         return clip.id;
       },
 
@@ -286,28 +376,163 @@ export const useEditorStore = create<EditorState>()(
         const s = get();
         const at = snapToFrame(time ?? s.currentTime, s.settings.fps);
         const clip = createTextClip(at);
-        let track = s.tracks.find((t) => t.kind === "text" && !t.locked);
-        if (!track) track = s.tracks.find((t) => t.kind === "overlay" && !t.locked);
-        if (!track) {
-          const created = makeTrack("text", s.tracks.filter((t) => t.kind === "text").length + 1);
-          created.clips = [clip];
-          set((state) => ({
-            tracks: [created, ...state.tracks],
-            selection: [clip.id],
-            saveState: "dirty",
-          }));
-          return clip.id;
-        }
-        clip.start = resolveOverlap(track.clips, new Set(), at, clip.duration);
-        const trackId = track.id;
+        const place = findPlacement(s.tracks, clip, at);
+        if (!place) return null;
+        clip.start = snapToFrame(place.start, s.settings.fps);
+        const trackId = place.trackId;
         set((state) => ({
           tracks: state.tracks.map((t) =>
-            t.id === trackId ? { ...t, clips: [...t.clips, clip].sort((a, b) => a.start - b.start) } : t
+            t.id === trackId
+              ? { ...t, clips: [...t.clips, clip].sort((a, b) => a.start - b.start) }
+              : t
+          ),
+          selection: [clip.id],
+          saveState: "dirty",
+        }));
+        // Nudge the playhead inside the clip so the text is visible right away.
+        const st = get();
+        if (st.currentTime < clip.start || st.currentTime >= clip.start + clip.duration) {
+          st.setCurrentTime(clip.start + Math.min(0.15, clip.duration / 2));
+        }
+        return clip.id;
+      },
+
+      addStickerClip: (sticker, time) => {
+        const s = get();
+        const at = snapToFrame(time ?? s.currentTime, s.settings.fps);
+        const clip = createStickerClip(at, { type: sticker.type, content: sticker.content });
+        const place = findPlacement(s.tracks, clip, at);
+        if (!place) return null;
+        clip.start = snapToFrame(place.start, s.settings.fps);
+        const trackId = place.trackId;
+        set((state) => ({
+          tracks: state.tracks.map((t) =>
+            t.id === trackId
+              ? { ...t, clips: [...t.clips, clip].sort((a, b) => a.start - b.start) }
+              : t
+          ),
+          selection: [clip.id],
+          saveState: "dirty",
+        }));
+        const st = get();
+        if (st.currentTime < clip.start || st.currentTime >= clip.start + clip.duration) {
+          st.setCurrentTime(clip.start + Math.min(0.15, clip.duration / 2));
+        }
+        return clip.id;
+      },
+
+      appendDrawingStroke: (stroke) => {
+        const s = get();
+        const time = snapToFrame(s.currentTime, s.settings.fps);
+        // Append to a drawing clip already active at the playhead.
+        for (const track of s.tracks) {
+          for (const clip of track.clips) {
+            if (clip.kind === "drawing" && time >= clip.start && time < clip.start + clip.duration) {
+              set((state) => ({
+                tracks: state.tracks.map((t) =>
+                  t.id === track.id
+                    ? {
+                        ...t,
+                        clips: t.clips.map((c) =>
+                          c.id === clip.id && c.drawing
+                            ? {
+                                ...c,
+                                duration: Math.max(c.duration, stroke.points.length > 0 ? stroke.points[stroke.points.length - 1]!.t + 0.4 : c.duration),
+                                drawing: { strokes: [...c.drawing.strokes, stroke] },
+                              }
+                            : c
+                        ),
+                      }
+                    : t
+                ),
+                saveState: "dirty",
+              }));
+              return clip.id;
+            }
+          }
+        }
+        // Otherwise start a new drawing clip at the playhead.
+        const clip = createDrawingClip(time, [stroke]);
+        const place = findPlacement(s.tracks, clip, time);
+        if (!place) return null;
+        const trackId = place.trackId;
+        set((state) => ({
+          tracks: state.tracks.map((t) =>
+            t.id === trackId
+              ? { ...t, clips: [...t.clips, clip].sort((a, b) => a.start - b.start) }
+              : t
           ),
           selection: [clip.id],
           saveState: "dirty",
         }));
         return clip.id;
+      },
+
+      undoLastStroke: (clipId) =>
+        set((s) => ({
+          tracks: s.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) =>
+              c.id === clipId && c.drawing && c.drawing.strokes.length > 0
+                ? { ...c, drawing: { strokes: c.drawing.strokes.slice(0, -1) } }
+                : c
+            ),
+          })),
+          saveState: "dirty",
+        })),
+
+      detachAudio: (clipId) => {
+        const s = get();
+        let source: Clip | undefined;
+        let sourceTrack: Track | undefined;
+        for (const track of s.tracks) {
+          for (const clip of track.clips) {
+            if (clip.id === clipId) {
+              source = clip;
+              sourceTrack = track;
+            }
+          }
+        }
+        if (!source || !sourceTrack || source.kind !== "video" || !source.mediaId) return false;
+
+        const audioClip: Clip = cloneClip(source);
+        audioClip.kind = "audio";
+        audioClip.label = `${source.label} (audio)`;
+        audioClip.transform = { ...audioClip.transform, opacity: 0 };
+
+        const place = findPlacement(s.tracks, audioClip, source.start);
+        if (!place) return false;
+        audioClip.start = place.start;
+        if (Math.abs(audioClip.start - source.start) > 0.01) {
+          // Could not align; still detach but note the offset via inOffset shift.
+          const delta = (audioClip.start - source.start) * audioClip.speed;
+          audioClip.inOffset = Math.max(0, audioClip.inOffset + delta);
+          audioClip.duration = Math.max(0.05, audioClip.duration - delta);
+        }
+        const trackId = place.trackId;
+
+        set((state) => ({
+          tracks: state.tracks.map((t) => {
+            if (t.id === trackId) {
+              return {
+                ...t,
+                clips: [...t.clips, audioClip].sort((a, b) => a.start - b.start),
+              };
+            }
+            if (t.id === sourceTrack!.id) {
+              return {
+                ...t,
+                clips: t.clips.map((c) =>
+                  c.id === source!.id ? { ...c, audio: { ...c.audio, muted: true } } : c
+                ),
+              };
+            }
+            return t;
+          }),
+          selection: [audioClip.id],
+          saveState: "dirty",
+        }));
+        return true;
       },
 
       updateClip: (id, updater) =>
@@ -489,10 +714,10 @@ export const useEditorStore = create<EditorState>()(
           const copy = cloneClip(clip);
           copy.start = at + clip.start;
           newIds.push(copy.id);
-          const kinds = preferredTrackKind(copy.kind);
+          const kinds = [...preferredTrackKindOf(copy.kind), ...compatibleTrackKinds(copy.kind)];
           let target: Track | undefined;
           for (const kind of kinds) {
-            target = tracks.find((t) => t.kind === kind && !t.locked);
+            target = tracks.find((t) => t.kind === kind && !t.locked && !(copy.kind !== "audio" && t.hidden));
             if (target) break;
           }
           if (!target) continue;
@@ -505,6 +730,149 @@ export const useEditorStore = create<EditorState>()(
         }
         set({ tracks, selection: newIds, saveState: "dirty" });
         return newIds.length;
+      },
+
+      /* ---------------- keyframes ---------------- */
+
+      setClipKeyframes: (clipId, tracks) =>
+        set((s) => ({
+          tracks: s.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) =>
+              c.id === clipId
+                ? {
+                    ...c,
+                    keyframes:
+                      tracks && Object.keys(tracks).length > 0 ? tracks : undefined,
+                  }
+                : c
+            ),
+          })),
+          saveState: "dirty",
+        })),
+
+      toggleClipKeyframe: (clipId, prop, time) => {
+        const s = get();
+        const clip = findClip(s.tracks, clipId);
+        if (!clip) return;
+        const at = snapToFrame(time ?? s.currentTime, s.settings.fps);
+        if (at < clip.start || at > clip.start + clip.duration) return;
+        const existing = clip.keyframes?.[prop] ?? [];
+        const tol = 0.5 / Math.max(1, s.settings.fps);
+        const hit = existing.find((k) => Math.abs(k.time - at) <= tol);
+        const next = hit
+          ? removeKeyframe(clip, prop, hit.id)
+          : upsertKeyframe(clip, prop, at, s.settings.fps, undefined, s.defaultKeyframeEasing);
+        get().setClipKeyframes(clipId, next);
+      },
+
+      removeClipKeyframe: (clipId, prop, kfId) => {
+        const clip = findClip(get().tracks, clipId);
+        if (!clip) return;
+        get().setClipKeyframes(clipId, removeKeyframe(clip, prop, kfId));
+      },
+
+      moveClipKeyframe: (clipId, prop, kfId, time) => {
+        const clip = findClip(get().tracks, clipId);
+        if (!clip) return;
+        get().setClipKeyframes(clipId, moveKeyframe(clip, prop, kfId, time));
+      },
+
+      setClipKeyframeEasing: (clipId, prop, kfId, easing) => {
+        const clip = findClip(get().tracks, clipId);
+        if (!clip) return;
+        get().setClipKeyframes(clipId, setKeyframeEasing(clip, prop, kfId, easing));
+      },
+
+      setClipKeyframeValue: (clipId, prop, kfId, value) => {
+        const clip = findClip(get().tracks, clipId);
+        if (!clip) return;
+        get().setClipKeyframes(clipId, setKeyframeValue(clip, prop, kfId, value));
+      },
+
+      clearClipKeyframes: (clipId, prop) => {
+        const clip = findClip(get().tracks, clipId);
+        if (!clip) return;
+        if (!prop) {
+          get().setClipKeyframes(clipId, {});
+        } else {
+          const next: KeyframeTracks = { ...clip.keyframes };
+          delete next[prop];
+          get().setClipKeyframes(clipId, next);
+        }
+      },
+
+      applyClipMotionPreset: (clipId, presetId) => {
+        const clip = findClip(get().tracks, clipId);
+        if (!clip) return;
+        get().setClipKeyframes(clipId, applyMotionPreset(clip, presetId));
+      },
+
+      recordMotionSamples: (clipId, samples, props) => {
+        const clip = findClip(get().tracks, clipId);
+        if (!clip || samples.length === 0) return;
+        const recorded = samplesToKeyframes(samples, props);
+        // Keep untouched tracks from the clip.
+        const merged: KeyframeTracks = { ...clip.keyframes };
+        for (const [prop, kfs] of Object.entries(recorded)) {
+          merged[prop as KeyframeProperty] = kfs;
+        }
+        // Reset the static transform to the first sample so gaps line up.
+        const first = samples[0]!;
+        set((s) => ({
+          tracks: s.tracks.map((t) => ({
+            ...t,
+            clips: t.clips.map((c) =>
+              c.id === clipId
+                ? {
+                    ...c,
+                    transform: { ...c.transform, x: first.x, y: first.y, scale: first.scale, rotation: first.rotation, opacity: first.opacity },
+                    keyframes: merged,
+                  }
+                : c
+            ),
+          })),
+          saveState: "dirty",
+        }));
+      },
+
+      setKeyframedValue: (clipId, prop, value) => {
+        const s = get();
+        const clip = findClip(s.tracks, clipId);
+        if (!clip) return;
+        const def = KEYFRAME_PROPERTIES[prop];
+        const draft: Clip = { ...clip };
+        def.apply(draft, value);
+        if (s.autoKeyframes) {
+          const at = snapToFrame(s.currentTime, s.settings.fps);
+          if (at >= clip.start && at <= clip.start + clip.duration) {
+            draft.keyframes = upsertKeyframe(
+              draft,
+              prop,
+              at,
+              s.settings.fps,
+              value,
+              s.defaultKeyframeEasing
+            );
+          }
+        }
+        get().updateClip(clipId, () => draft);
+      },
+
+      addMarkers: (markers) => {
+        if (markers.length === 0) return 0;
+        set((s) => ({
+          markers: [
+            ...s.markers,
+            ...markers.map((m) => ({
+              id: createId("marker"),
+              time: snapToFrame(Math.max(0, m.time), s.settings.fps),
+              name: m.name,
+            })),
+          ].sort((a, b) => a.time - b.time),
+          saveState: "dirty",
+        }));
+        return markers.length;
       },
 
       addMarker: (time, name) =>

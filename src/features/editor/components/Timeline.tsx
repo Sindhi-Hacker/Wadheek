@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ListPlus, Scissors, Trash2, Type as TypeIcon } from "lucide-react";
+import { Activity, ListPlus, Scissors, Snowflake, SplitSquareHorizontal, Trash2, Type as TypeIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -22,6 +22,9 @@ import { Playhead } from "./Playhead";
 import { ZoomControls } from "./ZoomControls";
 import { SnapToggle } from "./SnapToggle";
 import { EmptyTimelineState } from "./EmptyTimelineState";
+import { KeyframeGraph } from "./KeyframeGraph";
+import { addFreezeFrame } from "../lib/clip-tools";
+import { hasKeyframes } from "../lib/keyframes";
 import { formatTimecode } from "../lib/time-format";
 
 interface TimelineProps {
@@ -48,6 +51,15 @@ export function Timeline({ compact = false, onImportRequest }: TimelineProps) {
 
   const isEmpty = tracks.every((t) => t.clips.length === 0);
   const headerWidth = compact ? 96 : 176;
+  const [graphOpen, setGraphOpen] = React.useState(false);
+
+  const selectedClips = React.useMemo(
+    () =>
+      tracks.flatMap((t) => t.clips).filter((c) => selection.includes(c.id)),
+    [tracks, selection]
+  );
+  const graphClip =
+    selectedClips.length === 1 && hasKeyframes(selectedClips[0]!) ? selectedClips[0]! : null;
 
   /* Follow the playhead while playing. */
   const currentTime = useEditor((s) => s.currentTime);
@@ -185,6 +197,33 @@ export function Timeline({ compact = false, onImportRequest }: TimelineProps) {
           <Trash2 className="h-4 w-4" />
         </IconButton>
         <Separator orientation="vertical" className="mx-1 h-5" />
+        <IconButton
+          label="Detach audio from selected video"
+          disabled={selectedClips.length !== 1 || selectedClips[0]?.kind !== "video"}
+          onClick={() => {
+            const ok = store().detachAudio(selectedClips[0]!.id);
+            toast(ok ? "Audio detached to its own track" : "Select a single video clip to detach audio");
+          }}
+        >
+          <SplitSquareHorizontal className="h-4 w-4" />
+        </IconButton>
+        <IconButton
+          label="Freeze frame at playhead"
+          disabled={selectedClips.length !== 1 || selectedClips[0]?.kind !== "video"}
+          onClick={() => void addFreezeFrame(selectedClips[0]!.id)}
+        >
+          <Snowflake className="h-4 w-4" />
+        </IconButton>
+        <Separator orientation="vertical" className="mx-1 h-5" />
+        <IconButton
+          label="Keyframe curve editor"
+          disabled={!graphClip}
+          className={graphOpen && graphClip ? "bg-accent text-primary" : undefined}
+          aria-pressed={graphOpen}
+          onClick={() => setGraphOpen((v) => !v)}
+        >
+          <Activity className="h-4 w-4" />
+        </IconButton>
         <SnapToggle />
         <div className="ml-auto flex items-center gap-2">
           <span className="hidden font-mono text-[11px] text-muted-foreground sm:inline">
@@ -239,6 +278,11 @@ export function Timeline({ compact = false, onImportRequest }: TimelineProps) {
         </div>
         {isEmpty && <EmptyTimelineState onImport={onImportRequest} />}
       </div>
+
+      {/* Curve editor for the selected keyframed clip */}
+      {graphOpen && graphClip && (
+        <KeyframeGraph clip={graphClip} onClose={() => setGraphOpen(false)} />
+      )}
     </div>
   );
 }

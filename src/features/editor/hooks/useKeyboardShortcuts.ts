@@ -1,6 +1,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 import { COPY } from "@/config/copy";
+import { addFreezeFrame } from "../lib/clip-tools";
 import { PLAYBACK_DEFAULTS, TIMELINE_DEFAULTS } from "@/config/defaults";
 import { timelineDuration } from "../lib/timeline-math";
 import { useEditorStore } from "./useEditorStore";
@@ -171,6 +172,35 @@ export function useKeyboardShortcuts(handlers: ShortcutHandlers, announce: (msg:
             toast(COPY.toasts.clipSplit);
             announce(COPY.toasts.clipSplit);
           }
+          break;
+        }
+        case "t":
+        case "T": {
+          e.preventDefault();
+          const id = s.addTextClip();
+          if (id) {
+            s.requestTextEdit();
+            toast("Text added — type to replace it");
+          }
+          break;
+        }
+        case "f":
+        case "F": {
+          e.preventDefault();
+          const target = s.selection.length === 1 ? s.selection[0] : null;
+          if (target) void addFreezeFrame(target);
+          else toast("Select a video clip first — freeze frames need video.");
+          break;
+        }
+        case "D": {
+          e.preventDefault();
+          const target = s.selection.length === 1 ? s.selection[0] : null;
+          if (!target) {
+            toast("Select a single video clip to detach audio");
+            break;
+          }
+          const ok = s.detachAudio(target);
+          toast(ok ? "Audio detached to its own track" : "Select a single video clip to detach audio");
           break;
         }
         case "Delete":

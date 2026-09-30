@@ -2,6 +2,7 @@ import * as React from "react";
 import { timelineDuration } from "../lib/timeline-math";
 import { PlaybackEngine } from "../lib/playback-engine";
 import { drawTimelineFrame } from "../lib/canvas-compositor";
+import { registerPreviewEngine } from "../lib/engine-registry";
 import { useMediaStore } from "@/features/media/media-store";
 import { useEditorStore, useEditor } from "./useEditorStore";
 
@@ -10,8 +11,13 @@ import { useEditorStore, useEditor } from "./useEditorStore";
  * - advances the timeline clock (with J/K/L shuttle rates and looping)
  * - keeps hidden media elements in sync
  * - draws every frame through the shared compositor onto the given canvas
+ * - hides the clip currently being inline-edited (its live DOM twin is shown
+ *   by the preview overlay instead)
  */
-export function usePlayback(canvasRef: React.RefObject<HTMLCanvasElement>) {
+export function usePlayback(
+  canvasRef: React.RefObject<HTMLCanvasElement>,
+  hiddenClipIdsRef?: React.RefObject<Set<string>>
+) {
   const engineRef = React.useRef<PlaybackEngine | null>(null);
   const assets = useMediaStore((s) => s.assets);
   const mediaIds = useEditor((s) => s.mediaIds);
@@ -21,7 +27,9 @@ export function usePlayback(canvasRef: React.RefObject<HTMLCanvasElement>) {
   React.useEffect(() => {
     const engine = new PlaybackEngine();
     engineRef.current = engine;
+    registerPreviewEngine(engine);
     return () => {
+      registerPreviewEngine(null);
       engine.dispose();
       engineRef.current = null;
     };
@@ -96,14 +104,17 @@ export function usePlayback(canvasRef: React.RefObject<HTMLCanvasElement>) {
         if (canvas.height !== current.settings.height) canvas.height = current.settings.height;
         const ctx = canvas.getContext("2d", { alpha: false });
         if (ctx) {
-          drawTimelineFrame(ctx, current.tracks, current.currentTime, current.settings, engine);
+          const hidden = hiddenClipIdsRef?.current;
+          drawTimelineFrame(ctx, current.tracks, current.currentTime, current.settings, engine, {
+            hiddenClipIds: hidden && hidden.size > 0 ? hidden : undefined,
+          });
         }
       }
     };
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [canvasRef, settings.width, settings.height]);
+  }, [canvasRef, settings.width, settings.height, hiddenClipIdsRef]);
 
   return engineRef;
 }

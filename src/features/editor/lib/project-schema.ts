@@ -7,11 +7,22 @@ export const clipTransformSchema = z.object({
   scale: z.number().positive(),
   rotation: z.number(),
   opacity: z.number().min(0).max(1),
+  flipX: z.boolean().optional(),
+  flipY: z.boolean().optional(),
+  fit: z.enum(["contain", "cover"]).optional(),
+  backgroundBlur: z.number().min(0).max(1).optional(),
+});
+
+const keyframeSchema = z.object({
+  id: z.string(),
+  time: z.number(),
+  value: z.number(),
+  easing: z.string(),
 });
 
 export const clipSchema = z.object({
   id: z.string(),
-  kind: z.enum(["video", "audio", "image", "text"]),
+  kind: z.enum(["video", "audio", "image", "text", "sticker", "drawing"]),
   mediaId: z.string().optional(),
   label: z.string(),
   start: z.number().min(0),
@@ -27,6 +38,15 @@ export const clipSchema = z.object({
   }),
   blendMode: z.string(),
   filters: z.record(z.string(), z.union([z.number(), z.string()])).transform((v) => v as never),
+  chroma: z
+    .object({
+      enabled: z.boolean(),
+      color: z.string(),
+      similarity: z.number().min(0).max(1),
+      smoothness: z.number().min(0).max(1),
+      spill: z.number().min(0).max(1),
+    })
+    .optional(),
   text: z
     .object({
       content: z.string().max(LIMITS.maxTextLength),
@@ -42,6 +62,35 @@ export const clipSchema = z.object({
       background: z.string(),
       animationIn: z.string(),
       animationOut: z.string(),
+      letterSpacing: z.number().optional(),
+      lineHeight: z.number().optional(),
+    })
+    .optional(),
+  sticker: z
+    .object({
+      type: z.enum(["emoji", "shape"]),
+      content: z.string(),
+      size: z.number().positive(),
+      fill: z.string(),
+      stroke: z.string(),
+      strokeWidth: z.number().min(0),
+      shadowBlur: z.number().min(0),
+      shadowColor: z.string(),
+    })
+    .optional(),
+  drawing: z
+    .object({
+      strokes: z.array(
+        z.object({
+          id: z.string(),
+          color: z.string(),
+          width: z.number().positive(),
+          mode: z.enum(["pen", "marker"]),
+          points: z.array(
+            z.object({ x: z.number(), y: z.number(), t: z.number().min(0) })
+          ),
+        })
+      ),
     })
     .optional(),
   audio: z.object({
@@ -54,6 +103,7 @@ export const clipSchema = z.object({
   }),
   transitionIn: z.object({ type: z.string(), duration: z.number().min(0) }),
   transitionOut: z.object({ type: z.string(), duration: z.number().min(0) }),
+  keyframes: z.record(z.string(), z.array(keyframeSchema)).optional(),
 });
 
 export const trackSchema = z.object({

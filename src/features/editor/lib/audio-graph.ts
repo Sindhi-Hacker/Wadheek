@@ -1,11 +1,13 @@
 import type { Clip } from "../types/clip";
 import type { Track } from "../types/track";
 import { clipEnd } from "./timeline-math";
+import { evaluatedVolume } from "./keyframes";
 
 /**
  * Live Web Audio graph for preview playback.
  * Each media element is routed element -> gain -> panner -> master gain -> destination,
- * and per-frame `applyClipAudio` drives volume automation (fades, mute, solo).
+ * and per-frame `applyClipAudio` drives volume automation (fades, mute, solo,
+ * and keyframed volume).
  */
 export class AudioGraph {
   readonly ctx: AudioContext;
@@ -59,10 +61,23 @@ export class AudioGraph {
     }
   }
 
-  /** Compute the instantaneous gain for a clip at a timeline time (fades included). */
+  disconnectElement(key: string): void {
+    const node = this.nodes.get(key);
+    if (!node) return;
+    try {
+      node.source.disconnect();
+      node.gain.disconnect();
+      node.panner.disconnect();
+    } catch {
+      /* ignore */
+    }
+    this.nodes.delete(key);
+  }
+
+  /** Compute the instantaneous gain for a clip at a timeline time (fades + keyframes included). */
   static clipGainAt(clip: Clip, time: number): number {
     if (clip.audio.muted) return 0;
-    let gain = clip.audio.volume;
+    let gain = evaluatedVolume(clip, time);
     const local = time - clip.start;
     const remaining = clipEnd(clip) - time;
     if (clip.audio.fadeIn > 0 && local < clip.audio.fadeIn) {

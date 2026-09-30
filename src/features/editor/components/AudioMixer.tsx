@@ -1,12 +1,19 @@
-import { Headphones, Volume2, VolumeX } from "lucide-react";
+import { Activity, AudioLines, Headphones, Volume2, VolumeX, Waves } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/common/icon-button";
+import { toast } from "sonner";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { COPY } from "@/config/copy";
 import type { Clip } from "../types/clip";
 import { useEditor, useEditorStore } from "../hooks/useEditorStore";
 import { PropertySlider, Section } from "./inspector-controls";
+import { loadWaveform } from "../lib/idb-storage";
+import { getAsset } from "@/features/media/media-store";
+import { detectBeats, beatsToMarkers, autoDuckKeyframes } from "../lib/audio-tools";
+import { countKeyframes } from "../lib/keyframes";
 
 /** Per-clip audio: volume, pan, fades, mute — driven live into the Web Audio graph. */
 export function ClipAudioPanel({ clip }: { clip: Clip }) {
@@ -29,6 +36,8 @@ export function ClipAudioPanel({ clip }: { clip: Clip }) {
         defaultValue={1}
         format={(v) => `${Math.round(v * 100)}%`}
         onChange={(v) => update({ volume: v })}
+        clip={clip}
+        keyframeProp="volume"
       />
       <PropertySlider
         label={COPY.inspector.pan}
@@ -139,5 +148,98 @@ export function AudioMixer() {
         );
       })}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* AI-ish audio tools: beat markers + auto-ducking (both local)         */
+/* ------------------------------------------------------------------ */
+
+function useWaveformPeaks(mediaId: string | undefined) {
+  return useQuery({
+    queryKey: ["waveform", mediaId],
+    queryFn: async () => (mediaId ? ((await loadWaveform(mediaId)) ?? null) : null),
+    staleTime: Infinity,
+    enabled: !!mediaId,
+  });
+}
+
+/**
+ * One-click audio magic for the selected audio-bearing clip:
+ * - Detect beats → timeline markers (energy-based onset detection on the
+ *   extracted waveform — no server, no ML model download)
+ * - Auto-duck → volume keyframes that duck this clip under every other clip
+ */
+export function AudioToolsPanel({ clip }: { clip: Clip }) {
+  const { data: peaks } = useWaveformPeaks(clip.mediaId);
+  const selection = useEditor((s) => s.selection);
+  const single = selection.length === 1 && selection[0] === clip.id;
+
+  if (!single) return null;
+  const store = useEditorStore.getState;
+  const asset = getAsset(clip.mediaId);
+  const hasPeaks = !!peaks && peaks.length > 16;
+
+  const detectBeatsToMarkers = () => {
+    if (!peaks || !asset) return;
+    const sourceDuration = asset.duration || clip.duration;
+    const beats = detectBeats(peaks, sourceDuration, { sensitivity: 0.45 });
+    if (beats.length === 0) {
+      toast("No clear beats found — try a clip with stronger rhythm.");
+      return;
+    }
+    const markers = beatsToMarkers(clip, beats);
+    const n = store().addMarkers(markers);
+    toast.success(`${n} beat markers added — snap cuts to them with magnetic snapping`);
+  };
+
+  const applyAutoDuck = () => {
+    const others = store().tracks.flatMap((t) => t.clips).filter((c) => c.id !== clip.id);
+    const kfs = autoDuckKeyframes(clip, others, { dip: 0.25, fade: 0.35 });
+    if (kfs.length === 0) {
+      toast("Nothing to duck under — add speech or sound on other tracks first.");
+      return;
+    }
+    store().setClipKeyframes(clip.id, { ...clip.keyframes, volume: kfs });
+    toast.success(
+      `Auto-duck applied — music dips under ${kfs.filter((k) => k.value < clip.audio.volume).length} speech regions`
+    );
+  };
+
+  return (
+    <Section title="Audio tools">
+      <div className="grid grid-cols-1 gap-1.5">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-8 w-full justify-start gap-2 text-xs"
+          disabled={!hasPeaks}
+          onClick={detectBeatsToMarkers}
+        >
+          <Waves className="h-3.5 w-3.5" />
+          Detect beats → markers
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="h-8 w-full justify-start gap-2 text-xs"
+          onClick={applyAutoDuck}
+        >
+          <AudioLines className="h-3.5 w-3.5" />
+          Auto-duck under other clips
+        </Button>
+      </div>
+      {countKeyframes(clip) > 0 && (
+        <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Activity className="h-3 w-3" /> {countKeyframes(clip)} keyframes on this clip — see the
+          Keyframes section.
+        </p>
+      )}
+      {!hasPeaks && (
+        <p className="text-[11px] text-muted-foreground">
+          Waveform still extracting — beat detection unlocks in a moment.
+        </p>
+      )}
+    </Section>
   );
 }

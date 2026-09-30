@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AudioLines, Type as TypeIcon } from "lucide-react";
+import { AudioLines, Brush, Shapes, Type as TypeIcon } from "lucide-react";
 import { toast } from "sonner";
 import {
   ContextMenu,
@@ -20,6 +20,9 @@ import { useTrim } from "../hooks/useTrim";
 import { useThumbnails } from "../hooks/useThumbnails";
 import { useWaveform } from "../hooks/useWaveform";
 import { getAsset } from "@/features/media/media-store";
+import { addFreezeFrame } from "../lib/clip-tools";
+import { KEYFRAME_PROPERTIES, PROP_COLORS } from "../lib/keyframes";
+import type { KeyframeProperty } from "../types/clip";
 
 function clipKindClass(kind: ClipType["kind"]): string {
   switch (kind) {
@@ -28,10 +31,56 @@ function clipKindClass(kind: ClipType["kind"]): string {
     case "text":
       return TRACK_KIND_META.text.clipClass;
     case "image":
+    case "drawing":
       return TRACK_KIND_META.overlay.clipClass;
+    case "sticker":
+      return TRACK_KIND_META.text.clipClass;
     default:
       return TRACK_KIND_META.video.clipClass;
   }
+}
+
+/** Small diamond marker row for the clip's keyframes (all properties). */
+function KeyframeStrip({ clip, pps }: { clip: ClipType; pps: number }) {
+  const times = React.useMemo(() => {
+    const set = new Set<number>();
+    for (const kfs of Object.values(clip.keyframes ?? {})) {
+      for (const kf of kfs ?? []) set.add(kf.time);
+    }
+    return [...set].sort((a, b) => a - b);
+  }, [clip.keyframes]);
+  if (times.length === 0) return null;
+  return (
+    <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-10 h-2.5" aria-hidden>
+      {times.map((t) => (
+        <span
+          key={t}
+          className="absolute bottom-0.5 block h-1.5 w-1.5 -translate-x-1/2 rotate-45 border border-black/50 bg-white"
+          style={{ left: (t - clip.start) * pps }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Colored dot legend per keyframed property (shown when zoomed in). */
+function KeyframeLegend({ clip }: { clip: ClipType }) {
+  const props = (Object.keys(clip.keyframes ?? {}) as KeyframeProperty[]).filter(
+    (prop) => (clip.keyframes?.[prop] ?? []).length > 0
+  );
+  if (props.length === 0) return null;
+  return (
+    <div className="pointer-events-none absolute right-1 top-1 z-10 flex gap-0.5" aria-hidden>
+      {props.slice(0, 6).map((prop) => (
+        <span
+          key={prop}
+          className="h-1.5 w-1.5 rounded-full"
+          style={{ background: PROP_COLORS[prop] ?? "#fff" }}
+          title={KEYFRAME_PROPERTIES[prop]?.label ?? prop}
+        />
+      ))}
+    </div>
+  );
 }
 
 function WaveformStrip({ clip }: { clip: ClipType }) {
@@ -156,6 +205,8 @@ export const Clip = React.memo(function Clip({ clip, track }: ClipProps) {
             <span className="flex items-center gap-1 truncate text-[11px] font-semibold leading-tight drop-shadow-sm">
               {clip.kind === "text" && <TypeIcon className="h-3 w-3 shrink-0" />}
               {clip.kind === "audio" && <AudioLines className="h-3 w-3 shrink-0" />}
+              {clip.kind === "sticker" && <Shapes className="h-3 w-3 shrink-0" />}
+              {clip.kind === "drawing" && <Brush className="h-3 w-3 shrink-0" />}
               <span className="truncate">
                 {clip.kind === "text" ? clip.text?.content || clip.label : clip.label}
               </span>
@@ -194,6 +245,10 @@ export const Clip = React.memo(function Clip({ clip, track }: ClipProps) {
               </div>
             </>
           )}
+
+          {/* Keyframe markers */}
+          <KeyframeStrip clip={clip} pps={pps} />
+          <KeyframeLegend clip={clip} />
         </div>
       </ContextMenuTrigger>
       <ContextMenuContent>
@@ -216,6 +271,37 @@ export const Clip = React.memo(function Clip({ clip, track }: ClipProps) {
           {COPY.editor.duplicate}
           <ContextMenuShortcut>Ctrl D</ContextMenuShortcut>
         </ContextMenuItem>
+        {clip.kind === "text" && (
+          <ContextMenuItem
+            onClick={doAction((s) => {
+              s.select([clip.id]);
+              s.requestTextEdit();
+            })}
+          >
+            Edit on canvas
+          </ContextMenuItem>
+        )}
+        {clip.kind === "video" && (
+          <>
+            <ContextMenuItem
+              onClick={() => {
+                useEditorStore.getState().select([clip.id]);
+                void addFreezeFrame(clip.id);
+              }}
+            >
+              Freeze frame at playhead
+            </ContextMenuItem>
+            <ContextMenuItem
+              onClick={doAction((s) => {
+                s.select([clip.id]);
+                const ok = s.detachAudio(clip.id);
+                toast(ok ? "Audio detached to its own track" : "Could not detach audio");
+              })}
+            >
+              Detach audio
+            </ContextMenuItem>
+          </>
+        )}
         <ContextMenuItem
           onClick={doAction((s) => {
             s.select([clip.id]);

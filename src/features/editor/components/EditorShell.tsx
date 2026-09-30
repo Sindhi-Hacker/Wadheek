@@ -23,6 +23,7 @@ import { useAutoSave } from "../hooks/useAutoSave";
 import { useMediaImport } from "../hooks/useMediaImport";
 import { useResponsiveLayout } from "../hooks/useResponsiveLayout";
 import { useEditorStore } from "../hooks/useEditorStore";
+import { addFreezeFrame, exportCurrentFrame } from "../lib/clip-tools";
 import { toast } from "sonner";
 
 /**
@@ -89,6 +90,62 @@ export function EditorShell() {
         group: "Editor",
         shortcut: ["M"],
         run: () => store().addMarker(store().currentTime),
+      },
+      {
+        id: "freeze-frame",
+        label: "Freeze frame at playhead",
+        group: "Editor",
+        shortcut: ["F"],
+        run: () => {
+          const target = store().selection[0];
+          if (target) void addFreezeFrame(target);
+          else toast("Select a video clip first");
+        },
+      },
+      {
+        id: "detach-audio",
+        label: "Detach audio from video",
+        group: "Editor",
+        shortcut: ["Shift", "D"],
+        run: () => {
+          const target = store().selection[0];
+          const ok = target ? store().detachAudio(target) : false;
+          toast(ok ? "Audio detached" : "Select a single video clip first");
+        },
+      },
+      {
+        id: "toggle-draw",
+        label: "Toggle draw-on-video tool",
+        group: "Editor",
+        run: () => {
+          const s = store();
+          s.setDrawMode(s.drawMode ? null : { color: "#ef4444", width: 8, mode: "pen" });
+        },
+      },
+      {
+        id: "toggle-motion-rec",
+        label: "Toggle motion recorder (drag to animate)",
+        group: "Editor",
+        run: () => {
+          const s = store();
+          s.setMotionRecording(!s.motionRecording);
+          toast(s.motionRecording ? "Motion recorder off" : "Armed — drag a clip in the preview");
+        },
+      },
+      {
+        id: "toggle-autokey",
+        label: "Toggle auto keyframes",
+        group: "Editor",
+        run: () => {
+          store().toggleAutoKeyframes();
+          toast(store().autoKeyframes ? "Auto keyframes on" : "Auto keyframes off");
+        },
+      },
+      {
+        id: "export-frame",
+        label: "Export current frame as PNG",
+        group: "Editor",
+        run: () => void exportCurrentFrame(),
       },
       {
         id: "import-media",

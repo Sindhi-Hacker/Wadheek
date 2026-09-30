@@ -22,7 +22,10 @@ import { TextOverlayEditor } from "./TextOverlayEditor";
 import { TransitionPanel } from "./TransitionPanel";
 import { SpeedControl } from "./SpeedControl";
 import { CropPanel } from "./CropPanel";
-import { ClipAudioPanel, AudioMixer } from "./AudioMixer";
+import { StickerPanel, DrawingPanel } from "./StickerPanel";
+import { ChromaPanel } from "./ChromaPanel";
+import { KeyframePanel, KeyframeBadgeRow } from "./KeyframePanel";
+import { ClipAudioPanel, AudioMixer, AudioToolsPanel } from "./AudioMixer";
 
 function TransformSection({ clip }: { clip: Clip }) {
   const update = (patch: Partial<Clip["transform"]>) =>
@@ -42,6 +45,8 @@ function TransformSection({ clip }: { clip: Clip }) {
         defaultValue={0}
         format={(v) => `${Math.round(v * 100)}%`}
         onChange={(v) => update({ x: v })}
+        clip={clip}
+        keyframeProp="x"
       />
       <PropertySlider
         label={`${COPY.inspector.position} Y`}
@@ -52,6 +57,8 @@ function TransformSection({ clip }: { clip: Clip }) {
         defaultValue={0}
         format={(v) => `${Math.round(v * 100)}%`}
         onChange={(v) => update({ y: v })}
+        clip={clip}
+        keyframeProp="y"
       />
       <PropertySlider
         label={COPY.inspector.scale}
@@ -62,16 +69,20 @@ function TransformSection({ clip }: { clip: Clip }) {
         defaultValue={1}
         format={(v) => `${Math.round(v * 100)}%`}
         onChange={(v) => update({ scale: v })}
+        clip={clip}
+        keyframeProp="scale"
       />
       <PropertySlider
         label={COPY.inspector.rotation}
         value={clip.transform.rotation}
-        min={-180}
-        max={180}
+        min={-360}
+        max={360}
         step={1}
         defaultValue={0}
-        format={(v) => `${Math.round(v)} deg`}
+        format={(v) => `${Math.round(v)}°`}
         onChange={(v) => update({ rotation: v })}
+        clip={clip}
+        keyframeProp="rotation"
       />
       <PropertySlider
         label={COPY.inspector.opacity}
@@ -82,7 +93,61 @@ function TransformSection({ clip }: { clip: Clip }) {
         defaultValue={1}
         format={(v) => `${Math.round(v * 100)}%`}
         onChange={(v) => update({ opacity: v })}
+        clip={clip}
+        keyframeProp="opacity"
       />
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1.5">
+          <Label className="text-xs font-normal text-muted-foreground">Flip</Label>
+          <div className="flex gap-1">
+            {(
+              [
+                ["flipX", "Horizontal"],
+                ["flipY", "Vertical"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => update({ [key]: !clip.transform[key] } as Partial<Clip["transform"]>)}
+                className={
+                  "flex-1 rounded-md border px-2 py-1 text-[11px] transition-colors duration-fast hover:bg-accent " +
+                  (clip.transform[key] ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground")
+                }
+                aria-pressed={clip.transform[key]}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs font-normal text-muted-foreground">Frame fit</Label>
+          <Select
+            value={clip.transform.fit}
+            onValueChange={(v) => update({ fit: v as "contain" | "cover" })}
+          >
+            <SelectTrigger className="h-8 text-xs" aria-label="Frame fit">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="contain">Fit (letterbox)</SelectItem>
+              <SelectItem value="cover">Fill (crop)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      {(clip.kind === "video" || clip.kind === "image") && clip.transform.fit === "contain" && (
+        <PropertySlider
+          label="Background blur"
+          value={clip.transform.backgroundBlur}
+          min={0}
+          max={1}
+          step={0.05}
+          defaultValue={0}
+          format={(v) => (v === 0 ? "Off" : `${Math.round(v * 100)}%`)}
+          onChange={(v) => update({ backgroundBlur: v })}
+        />
+      )}
       <div className="space-y-1.5">
         <Label className="text-xs font-normal text-muted-foreground">
           {COPY.inspector.blendMode}
@@ -203,11 +268,17 @@ export function InspectorPanel() {
               <TimingSection clip={clip} />
               {clip.kind !== "audio" && <TransformSection clip={clip} />}
               {clip.kind === "text" && <TextOverlayEditor clip={clip} />}
+              {clip.kind === "sticker" && <StickerPanel clip={clip} />}
+              {clip.kind === "drawing" && <DrawingPanel clip={clip} />}
               {(clip.kind === "video" || clip.kind === "image") && <FilterPanel clip={clip} />}
               {(clip.kind === "video" || clip.kind === "image") && <CropPanel clip={clip} />}
-              {clip.kind !== "text" && clip.kind !== "image" && <SpeedControl clip={clip} />}
-              {clip.kind !== "text" && <TransitionPanel clip={clip} />}
+              {clip.kind === "video" && <ChromaPanel clip={clip} />}
+              {clip.kind !== "text" && clip.kind !== "image" && clip.kind !== "sticker" && clip.kind !== "drawing" && <SpeedControl clip={clip} />}
+              {clip.kind !== "text" && clip.kind !== "sticker" && clip.kind !== "drawing" && <TransitionPanel clip={clip} />}
               {(clip.kind === "video" || clip.kind === "audio") && <ClipAudioPanel clip={clip} />}
+              {(clip.kind === "video" || clip.kind === "audio") && <AudioToolsPanel clip={clip} />}
+              <KeyframeBadgeRow clip={clip} />
+              <KeyframePanel clip={clip} />
             </ScrollArea>
           )}
         </TabsContent>

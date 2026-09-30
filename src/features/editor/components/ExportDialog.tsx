@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Download, Loader2, X } from "lucide-react";
+import { Download, ImageDown, Loader2, X } from "lucide-react";
 import { showAlert } from "@/components/common/dialog-service";
 import {
   Dialog,
@@ -34,6 +34,7 @@ import { timelineDuration } from "../lib/timeline-math";
 import type { ExportSettings } from "../types/export";
 import { useEditor, useEditorStore } from "../hooks/useEditorStore";
 import { useExport } from "../hooks/useExport";
+import { exportCurrentFrame } from "../lib/clip-tools";
 
 interface ExportDialogProps {
   open: boolean;
@@ -122,7 +123,16 @@ export function ExportDialog({ open, onOpenChange }: ExportDialogProps) {
               </span>
             </div>
             <Progress value={progress.progress * 100} />
-            <DialogFooter>
+            <DialogFooter className="flex-col gap-2 sm:flex-col">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={() => void exportCurrentFrame()}
+          >
+            <ImageDown className="h-4 w-4" />
+            Save current frame as PNG
+          </Button>
               <Button variant="outline" onClick={cancel}>
                 <X className="h-4 w-4" /> {COPY.export.cancel}
               </Button>

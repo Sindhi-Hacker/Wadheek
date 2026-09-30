@@ -2,13 +2,18 @@ import * as React from "react";
 import {
   ChevronFirst,
   ChevronLast,
+  CircleDot,
+  Grid3x3,
   Maximize,
   Minimize,
   Pause,
+  Pencil,
   Play,
   Repeat,
   SkipBack,
   SkipForward,
+  Smile,
+  Type as TypeIcon,
 } from "lucide-react";
 import { Slider } from "@/components/ui/slider";
 import { IconButton } from "@/components/common/icon-button";
@@ -19,6 +24,9 @@ import { formatTimecode } from "../lib/time-format";
 import { timelineDuration } from "../lib/timeline-math";
 import { useEditor, useEditorStore } from "../hooks/useEditorStore";
 import { usePlayback } from "../hooks/usePlayback";
+import { PreviewOverlay } from "./PreviewOverlay";
+import { StickerPickerDialog } from "./StickerPickerDialog";
+import { toast } from "sonner";
 
 const CONTROLS_HIDE_DELAY_MS = 2600;
 
@@ -39,19 +47,26 @@ function fullscreenTarget(): Element | null {
  * Program monitor: composites the timeline onto a canvas at project
  * resolution and letterboxes it into the viewport with an explicit,
  * measured contain-fit (no CSS-only sizing, so no cropping at any ratio).
- * Doubles as a fullscreen player with transport controls.
+ * The canvas is wrapped by an interactive overlay (select / move / scale /
+ * rotate / draw / inline text edit) and doubles as a fullscreen player.
  */
 export function PreviewPlayer() {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const stageRef = React.useRef<HTMLDivElement>(null);
   const [wrapRef, wrapSize] = useResizeObserver<HTMLDivElement>();
+  const hiddenClipIdsRef = React.useRef<Set<string>>(new Set());
 
   const settings = useEditor((s) => s.settings);
-  usePlayback(canvasRef);
+  const drawMode = useEditor((s) => s.drawMode);
+  const motionRecording = useEditor((s) => s.motionRecording);
+  usePlayback(canvasRef, hiddenClipIdsRef);
 
   const [nativeFullscreen, setNativeFullscreen] = React.useState(false);
   const [pseudoFullscreen, setPseudoFullscreen] = React.useState(false);
   const isFullscreen = nativeFullscreen || pseudoFullscreen;
+
+  const [showGuides, setShowGuides] = React.useState(false);
+  const [stickerOpen, setStickerOpen] = React.useState(false);
 
   /* ---------------- explicit letterbox fit ---------------- */
   const fit = React.useMemo(() => {
@@ -149,6 +164,13 @@ export function PreviewPlayer() {
     if (isFullscreen && !playing) setControlsVisible(true);
   }, [isFullscreen, playing]);
 
+  const toggleDrawMode = () => {
+    const store = useEditorStore.getState();
+    const next = store.drawMode ? null : { color: "#ef4444", width: 8, mode: "pen" as const };
+    if (next) store.setPlaying(false);
+    store.setDrawMode(next);
+  };
+
   return (
     <div
       ref={stageRef}
@@ -169,25 +191,108 @@ export function PreviewPlayer() {
           isFullscreen && !controlsVisible && "cursor-none"
         )}
       >
-        <canvas
-          ref={canvasRef}
-          width={settings.width}
-          height={settings.height}
-          className={cn(!isFullscreen && "rounded-md shadow-elevation-2")}
-          style={fit ? { width: fit.width, height: fit.height } : { width: "100%", height: "auto" }}
-          onDoubleClick={toggleFullscreen}
-          onClick={isFullscreen ? () => useEditorStore.getState().togglePlay() : undefined}
-        />
+        <div
+          className="relative touch-none"
+          style={
+            fit
+              ? { width: fit.width, height: fit.height }
+              : { width: "100%", aspectRatio: `${settings.width} / ${settings.height}` }
+          }
+        >
+          <canvas
+            ref={canvasRef}
+            width={settings.width}
+            height={settings.height}
+            className="block h-full w-full rounded-md shadow-elevation-2"
+            onDoubleClick={toggleFullscreen}
+            onClick={isFullscreen ? () => useEditorStore.getState().togglePlay() : undefined}
+          />
+          <PreviewOverlay showGuides={showGuides} hiddenClipIdsRef={hiddenClipIdsRef} />
+        </div>
 
-        {/* Corner fullscreen affordance (normal mode) */}
+        {/* Creative toolbar (normal mode) */}
         {!isFullscreen && (
-          <div className="absolute right-2 top-2 opacity-100 transition-opacity duration-fast md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+          <div className="absolute right-2 top-2 flex flex-col gap-1 rounded-lg border bg-background/70 p-1 shadow-elevation-1 backdrop-blur-[var(--blur-overlay)] transition-opacity duration-fast md:opacity-0 md:group-hover:opacity-100 md:group-focus-within:opacity-100">
+            <IconButton
+              label="Add text"
+              size="icon-sm"
+              className="h-7 w-7"
+              onClick={() => {
+                useEditorStore.getState().addTextClip();
+                useEditorStore.getState().requestTextEdit();
+              }}
+            >
+              <TypeIcon className="h-3.5 w-3.5" />
+            </IconButton>
+            <IconButton
+              label="Add sticker"
+              size="icon-sm"
+              className="h-7 w-7"
+              onClick={() => setStickerOpen(true)}
+            >
+              <Smile className="h-3.5 w-3.5" />
+            </IconButton>
+            <IconButton
+              label="Draw on video"
+              size="icon-sm"
+              className={cn("h-7 w-7", drawMode && "bg-accent text-primary")}
+              aria-pressed={!!drawMode}
+              onClick={toggleDrawMode}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </IconButton>
+            <IconButton
+              label="Motion recorder — drag a clip to record its animation"
+              size="icon-sm"
+              className={cn("h-7 w-7", motionRecording && "animate-pulse bg-red-600 text-white")}
+              aria-pressed={motionRecording}
+              onClick={() => {
+                const store = useEditorStore.getState();
+                store.setMotionRecording(!store.motionRecording);
+                toast(
+                  store.motionRecording
+                    ? "Motion recorder off"
+                    : "Motion recorder armed — drag any clip in the preview to record its path"
+                );
+              }}
+            >
+              <CircleDot className="h-3.5 w-3.5" />
+            </IconButton>
+            <IconButton
+              label="Composition guides"
+              size="icon-sm"
+              className={cn("h-7 w-7", showGuides && "bg-accent text-primary")}
+              aria-pressed={showGuides}
+              onClick={() => setShowGuides((v) => !v)}
+            >
+              <Grid3x3 className="h-3.5 w-3.5" />
+            </IconButton>
+            <div className="mx-auto my-0.5 h-px w-5 bg-border" />
             <IconButton
               label={COPY.editor.fullscreen}
+              size="icon-sm"
+              className="h-7 w-7"
+              onClick={toggleFullscreen}
+            >
+              <Maximize className="h-3.5 w-3.5" />
+            </IconButton>
+          </div>
+        )}
+
+        {/* Corner fullscreen affordance (fullscreen mode) */}
+        {isFullscreen && (
+          <div
+            className={cn(
+              "absolute right-2 top-2 transition-opacity duration-fast",
+              controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
+            )}
+          >
+            <IconButton
+              label={COPY.editor.exitFullscreen}
               className="bg-background/70 shadow-elevation-1 backdrop-blur-[var(--blur-overlay)] hover:bg-background/90"
               onClick={toggleFullscreen}
             >
-              <Maximize className="h-4 w-4" />
+              <Minimize className="h-4 w-4" />
             </IconButton>
           </div>
         )}
@@ -200,6 +305,8 @@ export function PreviewPlayer() {
           onExit={exitFullscreen}
         />
       )}
+
+      <StickerPickerDialog open={stickerOpen} onOpenChange={setStickerOpen} />
     </div>
   );
 }

@@ -51,6 +51,10 @@ export const TIMELINE_DEFAULTS = {
   snapThresholdPx: 8,
   defaultImageDuration: 5,
   defaultTextDuration: 4,
+  defaultStickerDuration: 3,
+  defaultDrawingDuration: 5,
+  defaultFreezeDuration: 1,
+  defaultStickerSize: 220,
   minClipDuration: 0.05,
   rulerHeight: 28,
   autoScrollEdgePx: 48,
@@ -99,6 +103,10 @@ export const TEXT_DEFAULTS = {
     { id: "'Arial Black', Arial, sans-serif", label: "Arial Black" },
     { id: "'Comic Sans MS', cursive", label: "Comic Sans" },
     { id: "Impact, sans-serif", label: "Impact" },
+    { id: "'Trebuchet MS', sans-serif", label: "Trebuchet" },
+    { id: "Verdana, Geneva, sans-serif", label: "Verdana" },
+    { id: "'Palatino Linotype', 'Book Antiqua', serif", label: "Palatino" },
+    { id: "'Brush Script MT', cursive", label: "Brush Script" },
   ],
   fontSize: 72,
   fontWeight: 700,
@@ -117,6 +125,50 @@ export const TEXT_DEFAULTS = {
     { id: "scale", label: "Scale" },
   ],
 } as const;
+
+/** One-tap text style presets (InShot-style looks). */
+export const TEXT_PRESETS = [
+  {
+    id: "title",
+    label: "Title",
+    style: { fontSize: 96, fontWeight: 800, color: "#ffffff", strokeWidth: 0, shadowBlur: 18, background: "transparent", letterSpacing: 0 },
+  },
+  {
+    id: "subtitle",
+    label: "Subtitle",
+    style: { fontSize: 44, fontWeight: 500, color: "#ffffffcc", strokeWidth: 0, shadowBlur: 6, background: "transparent", letterSpacing: 0.5 },
+  },
+  {
+    id: "caption",
+    label: "Caption",
+    style: { fontSize: 56, fontWeight: 700, color: "#ffffff", strokeWidth: 0, shadowBlur: 0, background: "#00000080", letterSpacing: 0 },
+  },
+  {
+    id: "neon",
+    label: "Neon",
+    style: { fontSize: 84, fontWeight: 800, color: "#22d3ee", strokeWidth: 0, shadowBlur: 42, shadowColor: "#22d3ee", background: "transparent", letterSpacing: 2 },
+  },
+  {
+    id: "meme",
+    label: "Meme",
+    style: { fontSize: 64, fontWeight: 900, color: "#ffffff", strokeColor: "#000000", strokeWidth: 8, shadowBlur: 0, background: "transparent", letterSpacing: 0 },
+  },
+  {
+    id: "news",
+    label: "News Bar",
+    style: { fontSize: 48, fontWeight: 700, color: "#ffffff", strokeWidth: 0, shadowBlur: 0, background: "#dc2626", letterSpacing: 0 },
+  },
+  {
+    id: "karaoke",
+    label: "Karaoke",
+    style: { fontSize: 60, fontWeight: 800, color: "#facc15", strokeColor: "#7c2d12", strokeWidth: 3, shadowBlur: 10, background: "transparent", letterSpacing: 0 },
+  },
+  {
+    id: "typewriter",
+    label: "Typewriter",
+    style: { fontSize: 52, fontWeight: 400, color: "#ffffff", strokeWidth: 0, shadowBlur: 4, background: "transparent", letterSpacing: 1 },
+  },
+] as const;
 
 /** Filter parameter ranges — a single source of truth for the FilterPanel + compositor. */
 export const FILTER_DEFS = [

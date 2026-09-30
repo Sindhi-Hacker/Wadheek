@@ -1,5 +1,5 @@
 import * as React from "react";
-import { AudioLines, FileVideo, Image as ImageIcon, Import, Plus, Trash2, Type } from "lucide-react";
+import { AudioLines, FileVideo, Image as ImageIcon, Import, PackageOpen, Plus, Trash2, Type } from "lucide-react";
 import { toast } from "sonner";
 import { showAlert } from "@/components/common/dialog-service";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import { formatDuration } from "../lib/time-format";
 import { useMediaImport } from "../hooks/useMediaImport";
 import { useThumbnails } from "../hooks/useThumbnails";
 import { useEditorStore } from "../hooks/useEditorStore";
+import { StockLibraryDialog } from "./StockLibraryDialog";
 
 function MediaTypeIcon({ type }: { type: MediaAsset["type"] }) {
   if (type === "video") return <FileVideo className="h-4 w-4" />;
@@ -120,15 +121,22 @@ function MediaItem({ asset }: { asset: MediaAsset }) {
 export function MediaLibraryPanel() {
   const assets = useMediaStore((s) => s.assets);
   const { inputRef, openFilePicker, onInputChange, importing } = useMediaImport();
+  const [stockOpen, setStockOpen] = React.useState(false);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-sidebar text-sidebar-foreground">
       <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <h2 className="text-sm font-semibold">{COPY.mediaLibrary.title}</h2>
-        <Button size="sm" variant="secondary" onClick={openFilePicker} disabled={importing}>
-          <Import className="h-3.5 w-3.5" /> {COPY.mediaLibrary.importCta}
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => setStockOpen(true)}>
+            <PackageOpen className="h-3.5 w-3.5" /> Stock
+          </Button>
+          <Button size="sm" variant="secondary" onClick={openFilePicker} disabled={importing}>
+            <Import className="h-3.5 w-3.5" /> {COPY.mediaLibrary.importCta}
+          </Button>
+        </div>
       </div>
+      <StockLibraryDialog open={stockOpen} onOpenChange={setStockOpen} />
       <input
         ref={inputRef}
         type="file"

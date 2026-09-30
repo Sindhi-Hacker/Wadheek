@@ -2,23 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Wadheek — a local-first, in-browser video studio. Import, edit, and export without uploading anything." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="Wadheek — a fast, fully client-side video editor. Your footage never leaves your device." />
     <meta name="color-scheme" content="light dark" />
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c6cf5'/%3E%3Cpath d='M11 9l12 7-12 7z' fill='white'/%3E%3C/svg%3E"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%237c3aed'/%3E%3Cpath d='M7 10l3.5 12L14 12l3.5 10L21 10' stroke='white' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='24.5' cy='11' r='2.2' fill='white'/%3E%3C/svg%3E"
     />
-    <title>Wadheek — Video Studio</title>
+    <title>Wadheek — Client-Side Video Editor</title>
     <script>
-      // Apply the stored theme before first paint (no flash, no hardcoded theme).
+      // Apply the persisted theme before first paint to avoid a flash.
       (function () {
         try {
-          var mode = JSON.parse(localStorage.getItem('wadheek:theme') || '"system"');
-          if (mode !== 'light' && mode !== 'dark' && mode !== 'system') mode = 'system';
-          var dark = mode === 'dark' || (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.classList.toggle('dark', dark);
-          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+          var stored = localStorage.getItem("wadheek.theme");
+          var dark =
+            stored === "dark" ||
+            ((stored === null || stored === "system") &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches);
+          if (dark) document.documentElement.classList.add("dark");
         } catch (e) {}
       })();
     </script>
